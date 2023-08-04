@@ -12,21 +12,20 @@ import com.yupi.springbootinit.constant.CommonConstant;
 import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
-import com.yupi.springbootinit.model.dto.chart.ChartAddRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartEditRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartQueryRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartUpdateRequest;
+import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
 
 import com.yupi.springbootinit.service.ChartService;
 import com.yupi.springbootinit.service.UserService;
+import com.yupi.springbootinit.utils.ExcelUtils;
 import com.yupi.springbootinit.utils.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -267,5 +266,59 @@ public class ChartController {
         boolean result = chartService.updateById(chart);
         return ResultUtils.success(result);
     }
+    /**
 
-}
+     * 智能分析
+
+     * 文件上传
+
+     * @param multipartFile
+
+     * @param genChartByAiRequest
+
+     * @param request
+
+     * @return
+
+     */
+
+    @PostMapping("/gen")
+
+    public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+
+                                             GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+
+        String name = genChartByAiRequest.getName();
+
+        String goal = genChartByAiRequest.getGoal();
+
+        String chartType = genChartByAiRequest.getChartType();
+
+        // 校验，如果目标是空的，那么就抛出请求参数为空的异常
+
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        // 名称校验，长度限制！
+
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+
+
+
+        // 用户输入
+
+        StringBuilder userInput = new StringBuilder();
+        //给模型一个定型一个角色
+
+        userInput.append("你是一个数据分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论。").append("\n");
+
+        userInput.append("分析目标：").append(goal).append("\n");
+
+        // 压缩后的数据，原始数据压缩，Ai接口普遍都有输入字数的限制
+        // 前端传的是multipartFile
+
+        String result = ExcelUtils.excelToCsv(multipartFile);
+
+        userInput.append("数据：").append(result).append("\n");
+
+        return ResultUtils.success(userInput.toString());
+
+}}
