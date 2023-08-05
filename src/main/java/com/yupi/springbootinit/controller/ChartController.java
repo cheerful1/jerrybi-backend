@@ -15,7 +15,10 @@ import com.yupi.springbootinit.exception.ThrowUtils;
 import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
+import com.yupi.springbootinit.manager.AiManager;
 
+import com.yupi.springbootinit.model.vo.BiResponse;
+import org.checkerframework.checker.units.qual.C;
 import com.yupi.springbootinit.service.ChartService;
 import com.yupi.springbootinit.service.UserService;
 import com.yupi.springbootinit.utils.ExcelUtils;
@@ -34,8 +37,6 @@ import java.util.List;
 /**
  * 帖子接口
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @RestController
 @RequestMapping("/chart")
@@ -47,6 +48,9 @@ public class ChartController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private AiManager aiManager;
 
     private final static Gson GSON = new Gson();
 
@@ -148,7 +152,7 @@ public class ChartController {
 
         long id = chartUpdateRequest.getId();
         // 判断是否存在
-        Chart oldChart = chartService.getById(id);
+            Chart oldChart = chartService.getById(id);
         ThrowUtils.throwIf(oldChart == null, ErrorCode.NOT_FOUND_ERROR);
         boolean result = chartService.updateById(chart);
         return ResultUtils.success(result);
@@ -284,7 +288,7 @@ public class ChartController {
 
     @PostMapping("/gen")
 
-    public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
+    public BaseResponse<BiResponse> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
 
                                              GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
 
@@ -301,24 +305,85 @@ public class ChartController {
 
         ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
 
+        User loginUser = userService.getLoginUser(request);
+        long biModelId = 1659171950288818178L;
 
 
         // 用户输入
 
         StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+
+        // 拼接分析目标
+        String userGoal = goal;
+        if (StringUtils.isNotBlank(chartType)) {
+
+            userGoal += "，请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+
+        userInput.append("原始数据：").append("\n");
         //给模型一个定型一个角色
 
-        userInput.append("你是一个数据分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论。").append("\n");
+//        userInput.append("你是一个数据分析师，接下来我会给你我的分析目标和原始数据，请告诉我分析结论。").append("\n");
+//
+//        userInput.append("分析目标：").append(goal).append("\n");
+//
+//        // 压缩后的数据，原始数据压缩，Ai接口普遍都有输入字数的限制
+//        // 前端传的是multipartFile
+//
+//        String result = ExcelUtils.excelToCsv(multipartFile);
+//
+//        userInput.append("数据：").append(result).append("\n");
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
 
-        userInput.append("分析目标：").append(goal).append("\n");
+        userInput.append(csvData).append("\n");
 
-        // 压缩后的数据，原始数据压缩，Ai接口普遍都有输入字数的限制
-        // 前端传的是multipartFile
+        //使用aiManager方法进行封装
+        String result = aiManager.doChat(biModelId, userInput.toString());
 
-        String result = ExcelUtils.excelToCsv(multipartFile);
+        String[] splits = result.split("【【【【【");
 
-        userInput.append("数据：").append(result).append("\n");
 
-        return ResultUtils.success(userInput.toString());
+        // 拆分出来应该是2块，做一个校验
+        if (splits.length < 3) {
+
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 生成错误");
+
+        }
+
+        String genChart = splits[1].trim();
+
+        String genResult = splits[2].trim();
+
+        // 插入到数据库
+
+        Chart chart = new Chart();
+
+        chart.setName(name);
+
+        chart.setGoal(goal);
+
+        chart.setChartData(csvData);
+
+        chart.setChartType(chartType);
+
+        chart.setGenChart(genChart);
+
+        chart.setGenResult(genResult);
+
+        chart.setUserId(loginUser.getId());
+
+        boolean saveResult = chartService.save(chart);
+
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+
+        //将返回的结果封装到biResponse中
+        BiResponse biResponse = new BiResponse();
+        biResponse.setGenChart(genChart);
+        biResponse.setGenResult(genResult);
+        biResponse.setChartId(chart.getId());
+        return ResultUtils.success(biResponse);
+
 
 }}
