@@ -7,31 +7,18 @@ import com.yupi.yucongming.dev.model.DevChatRequest;
 import com.yupi.yucongming.dev.model.DevChatResponse;
 import org.springframework.stereotype.Service;
 import javax.annotation.Resource;
-
-
-
 /**
  * @author : wangshanjie
  * @date : 18:12 2023/8/4
  */
-
 /**
-
  * 用于对接 AI 平台
-
  */
-
 @Service
-
 public class AiManager {
 
-
-
     @Resource
-
     private YuCongMingClient yuCongMingClient;
-
-
 
     /**
 
