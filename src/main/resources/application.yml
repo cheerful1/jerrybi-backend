@@ -70,12 +70,6 @@ mybatis-plus:
       logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
 
 
-  # 鱼聪明 AI 配置（https://yucongming.com/）
-yuapi:
-  client:
-  access-key: rakreujcerz2hfnchtwsihwbpywzsom7
-  secret-key: f1sneupmujl69gqqoa4lg7mk8s1d54q5
-
 
 
 # 微信相关
@@ -109,3 +103,10 @@ cos:
     secretKey: xxx
     region: xxx
     bucket: xxx
+
+
+  # 鱼聪明 AI 配置（https://yucongming.com/）
+yuapi:
+  client:
+  access-key: wel72bx1rdhglzo1p6rxx5wf5zkoi1g0
+  secret-key: jfoyo0covmo3xbd1b6ou7aa88ioyvfzx

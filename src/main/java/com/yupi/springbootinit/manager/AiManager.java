@@ -14,44 +14,28 @@ import javax.annotation.Resource;
 /**
  * 用于对接 AI 平台
  */
+
 @Service
 public class AiManager {
-
     @Resource
     private YuCongMingClient yuCongMingClient;
-
     /**
-
      * AI 对话
-
      *
-
-     * @param modelId 模型的id 由外层来指定不把这个写死了
-
+     * @param modelId
      * @param message
-
      * @return
-
      */
-
     public String doChat(long modelId, String message) {
-
         DevChatRequest devChatRequest = new DevChatRequest();
-
         devChatRequest.setModelId(modelId);
-
         devChatRequest.setMessage(message);
-
-        BaseResponse<DevChatResponse> response = yuCongMingClient.doChat(devChatRequest);
-
+        YuCongMingClient client = new YuCongMingClient("wel72bx1rdhglzo1p6rxx5wf5zkoi1g0","jfoyo0covmo3xbd1b6ou7aa88ioyvfzx");
+        BaseResponse<DevChatResponse> response = client.doChat(devChatRequest);
         if (response == null) {
-
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "AI 响应错误");
-
         }
-
         return response.getData().getContent();
 
     }
-
 }
