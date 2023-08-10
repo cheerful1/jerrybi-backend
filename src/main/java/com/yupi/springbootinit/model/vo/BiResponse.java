@@ -24,4 +24,7 @@ public class BiResponse {
 
     private Long chartId;
 
+    private String Status;
+
+
 }

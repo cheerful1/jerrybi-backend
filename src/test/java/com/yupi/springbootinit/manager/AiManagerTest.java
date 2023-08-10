@@ -25,7 +25,6 @@ class AiManagerTest {
 
 
     @Resource
-
     private AiManager aiManager;
 
 
@@ -49,6 +48,10 @@ class AiManagerTest {
                 "3号,30\n");
 
         System.out.println(answer);
+//        //1659171950288818178L
+//        String answer = aiManager.doChat(1659171950288818178L,"邓紫棋");
+//        System.out.println(answer);
+
 
     }
 
