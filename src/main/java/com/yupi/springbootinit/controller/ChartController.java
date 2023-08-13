@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
 import com.yupi.springbootinit.annotation.AuthCheck;
+import com.yupi.springbootinit.bizmq.BiMessageProduce;
 import com.yupi.springbootinit.common.BaseResponse;
 import com.yupi.springbootinit.common.DeleteRequest;
 import com.yupi.springbootinit.common.ErrorCode;
@@ -54,7 +55,11 @@ public class ChartController {
     private RedisLimiterManager redisLimiterManager;
     @Resource
     private ThreadPoolExecutor threadPoolExecutor;
-    private final static Gson GSON = new Gson();
+    @Resource
+    private BiMessageProduce biMessageProducer;
+
+
+//    private final static Gson GSON = new Gson();
     // region 增删改查
     /**
      * 创建
@@ -248,7 +253,7 @@ public class ChartController {
 //                "{前端 Echarts V5 的 option 配置对象js代码，合理地将数据进行可视化，不要生成任何多余的内容，比如注释}\n" +
 //                "【【【【【\n" +
 //                "{明确的数据分析结论、越详细越好，不要生成多余的注释}";
-        long biModelId = 1659171950288818178L;
+        long biModelId = CommonConstant.Bi_Model_Id;
         // 分析需求：
         // 分析网站用户的增长情况
         // 原始数据：
@@ -439,5 +444,99 @@ public class ChartController {
         queryWrapper.orderBy(SqlUtils.validSortField(sortField), sortOrder.equals(CommonConstant.SORT_ORDER_ASC),
                 sortField);
         return queryWrapper;
+    }
+
+    /**
+     * 智能分析（异步消息队列）
+     *
+     * @param multipartFile
+     * @param genChartByAiRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/gen/async/mq")
+    public BaseResponse<BiResponse> genChartByAiAsyncMq(@RequestPart("file") MultipartFile multipartFile,
+                                                      GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        // 校验
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "目标为空");
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() > 100, ErrorCode.PARAMS_ERROR, "名称过长");
+        // 校验文件
+        long size = multipartFile.getSize();
+        String originalFilename = multipartFile.getOriginalFilename();
+        // 校验文件大小
+        final long ONE_MB = 1024 * 1024L;
+        ThrowUtils.throwIf(size > ONE_MB, ErrorCode.PARAMS_ERROR, "文件超过 1M");
+        // 校验文件后缀 aaa.png
+        String suffix = FileUtil.getSuffix(originalFilename);
+        final List<String> validFileSuffixList = Arrays.asList("xlsx", "xls");
+        ThrowUtils.throwIf(!validFileSuffixList.contains(suffix), ErrorCode.PARAMS_ERROR, "文件后缀非法");
+        User loginUser = userService.getLoginUser(request);
+        // 限流判断，每个用户一个限流器
+        redisLimiterManager.doRateLimit("genChartByAi_" + loginUser.getId());
+        // 无需写 prompt，直接调用现有模型，https://www.yucongming.com，公众号搜【鱼聪明AI】
+//        final String prompt = "你是一个数据分析师和前端开发专家，接下来我会按照以下固定格式给你提供内容：\n" +
+//                "分析需求：\n" +
+//                "{数据分析的需求或者目标}\n" +
+//                "原始数据：\n" +
+//                "{csv格式的原始数据，用,作为分隔符}\n" +
+//                "请根据这两部分内容，按照以下指定格式生成内容（此外不要输出任何多余的开头、结尾、注释）\n" +
+//                "【【【【【\n" +
+//                "{前端 Echarts V5 的 option 配置对象js代码，合理地将数据进行可视化，不要生成任何多余的内容，比如注释}\n" +
+//                "【【【【【\n" +
+//                "{明确的数据分析结论、越详细越好，不要生成多余的注释}";
+        long biModelId = 1659171950288818178L;
+        // 分析需求：
+        // 分析网站用户的增长情况
+        // 原始数据：
+        // 日期,用户数
+        // 1号,10
+        // 2号,20
+        // 3号,30
+        // 构造用户输入
+        StringBuilder userInput = new StringBuilder();
+        userInput.append("分析需求：").append("\n");
+        // 拼接分析目标
+        String userGoal = goal;
+        if (StringUtils.isNotBlank(chartType)) {
+            userGoal += "，请使用" + chartType;
+        }
+        userInput.append(userGoal).append("\n");
+        userInput.append("原始数据：").append("\n");
+        // 压缩后的数据
+        String csvData = ExcelUtils.excelToCsv(multipartFile);
+        userInput.append(csvData).append("\n");
+        // 插入到数据库
+        Chart chart = new Chart();
+        chart.setName(name);
+        chart.setGoal(goal);
+        chart.setChartData(csvData);
+        chart.setChartType(chartType);
+        chart.setStatus("wait");
+        chart.setUserId(loginUser.getId());
+        boolean saveResult = chartService.save(chart);
+        ThrowUtils.throwIf(!saveResult, ErrorCode.SYSTEM_ERROR, "图表保存失败");
+
+        // todo 建议处理任务队列满了后，抛异常的情况(因为提交任务报错了，前端会返回异常)
+        /**
+         * 将消费者需要的参数作为消息的内容传递过去，将其发送到消息队列中。这样，消费者就可以从消息队列中获取消息，
+         * 并恢复当时的场景，以便执行相应的任务。这种方式使得消费者能够独立处理任务，而不是在线程池中处理。
+         * 通过在消息队列中发送消息并携带所需参数，消费者可以获取到这些消息并进行相应的处理。
+         * 生产者的代码应该与消费者的代码保持一致，根据消费者的要求来发送相应的消息。
+         * 在当前代码中，并没有将userInput保存到数据库中，因此我们需要将它传递到消息队列中；
+         * 还有一种方法，userInput中的goal、csvData是保存到数据库中，而userGoal是已经封装好的，chart也是图表的信息，因此我们可以直接从数据库中获取这些信息，这样，在消息传递时，我们只需要传递一个标识或者引用就可以了；
+         * 既然所有消费者需要的信息都已经存储在数据库中，就可以从数据库中获取这些信息，从而节约了消息的大小和体积。
+         * 我们先去插入数据库，插入成功之后，就得到消息的 id，传递消息的 id；
+         * 拿字符串封装好了之后，我们发消息、取消息只要传一个 userId。
+         */
+        long newChartId = chart.getId();
+        biMessageProducer.sendMessage(String.valueOf(newChartId));
+
+
+        BiResponse biResponse = new BiResponse();
+        biResponse.setChartId(newChartId);
+        return ResultUtils.success(biResponse);
     }
 }
