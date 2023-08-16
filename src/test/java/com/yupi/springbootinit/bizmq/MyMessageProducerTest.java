@@ -15,7 +15,7 @@ import javax.annotation.Resource;
 // 使用 @SpringBootTest 注解标记该类为一个 Spring Boot 的测试类
 @SpringBootTest
 class MyMessageProducerTest {
-
+    
     // 使用 @Resource 注解注入一个消息生产者的实例
     @Resource
     private MyMessageProducer myMessageProducer;
