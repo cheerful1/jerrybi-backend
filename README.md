@@ -101,9 +101,9 @@ npm run dev
 ![image](./images/img_3.png)
 
 ### 图表管理界面
-![图表管理](./images/img_5.png)
+![图表管理](./images/img_5.png)![img.png](images/img_4.png)
 ### 查看图表原始数据
-![图表数据](./images/img_4.png)
+![图表数据](images/img_5.png)
 
 
 ### 个人中心
